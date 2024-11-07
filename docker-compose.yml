@@ -1,17 +1,48 @@
-version: "3.7"
+# docker-compose.yml para orquestrar ambos os containers
+# Salve este arquivo como docker-compose.yml na raiz do projeto
+
+# docker-compose.yml
+version: '3.9'
 
 services:
-  web:
-    build: .
-    environment:
-      NODE_ENV:
-      MONGODB_URI: mongodb://mongo:27017/nodegoat
-    command: sh -c "until nc -z -w 2 mongo 27017 && echo 'mongo is ready for connections' && node artifacts/db-reset.js && npm start; do sleep 2; done"
+  prometheus:
+    image: prom/prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml  # Mapeando o arquivo de configuração
     ports:
-      - "4000:4000"
+      - "9090:9090"  # Porta onde o Prometheus estará acessível
 
-  mongo:
-    image: mongo:4.4
-    user: mongodb
-    expose:
-      - 27017
+  mariadb:
+    build:
+      context: .
+      dockerfile: Dockerfile_mariadb
+    container_name: mariadb_container
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: school_db
+      MYSQL_USER: flask_user
+      MYSQL_PASSWORD: flask_password
+
+  flask_app:
+    build:
+      context: .
+      dockerfile: Dockerfile_flask
+    container_name: flask_app_container
+    ports:
+      - "5001:5000"
+    depends_on:
+      - mariadb
+    environment:
+      FLASK_APP: app
+      FLASK_ENV: development
+      FLASK_DB_HOST: mariadb
+      FLASK_DB_USER: flask_user
+      FLASK_DB_PASSWORD: flask_password
+      FLASK_DB_NAME: school_db
+
+volumes:
+  db_data:
